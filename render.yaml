@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: backend
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
@@ -20,4 +20,10 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CLIENT_URLS
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
         sync: false
