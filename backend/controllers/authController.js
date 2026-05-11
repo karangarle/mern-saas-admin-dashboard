@@ -76,7 +76,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ email: normalizedEmail }).select("+password");
 
-  if (!user || !(await user.comparePassword(password))) {
+  if (!user || !user.password || !(await user.comparePassword(password))) {
     res.status(401);
     throw new Error("Invalid email or password");
   }
