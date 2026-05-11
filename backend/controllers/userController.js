@@ -1,8 +1,10 @@
 const asyncHandler = require("express-async-handler");
 const { validationResult } = require("express-validator");
 const User = require("../models/User");
+const { deleteImage, uploadImageBuffer } = require("../utils/cloudinary");
 
 const allowedRoles = ["admin", "manager", "user"];
+const allowedSorts = new Set(["createdAt", "-createdAt", "name", "-name", "email", "-email"]);
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -10,6 +12,7 @@ const sanitizeUser = (user) => ({
   email: user.email,
   role: user.role,
   isActive: user.isActive,
+  profileImage: user.profileImage || null,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
@@ -32,9 +35,10 @@ const handleValidationErrors = (req, res) => {
 
 const buildUserQuery = ({ search, role, status }) => {
   const query = {};
+  const trimmedSearch = search?.trim();
 
-  if (search) {
-    const safeSearch = escapeRegex(search.trim());
+  if (trimmedSearch) {
+    const safeSearch = escapeRegex(trimmedSearch);
 
     query.$or = [
       { name: { $regex: safeSearch, $options: "i" } },
@@ -63,11 +67,17 @@ const getUsers = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
   const skip = (page - 1) * limit;
-  const sort = req.query.sort || "-createdAt";
+  const sort = allowedSorts.has(req.query.sort) ? req.query.sort : "-createdAt";
   const query = buildUserQuery(req.query);
+  const projection = "name email role isActive profileImage createdAt updatedAt";
 
   const [users, total] = await Promise.all([
-    User.find(query).sort(sort).skip(skip).limit(limit).lean(),
+    User.find(query)
+      .select(projection)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
     User.countDocuments(query),
   ]);
   const totalPages = Math.ceil(total / limit) || 1;
@@ -83,6 +93,11 @@ const getUsers = asyncHandler(async (req, res) => {
         totalPages,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
+      },
+      filters: {
+        search: req.query.search?.trim() || "",
+        role: req.query.role || "",
+        status: req.query.status || "",
       },
     },
   });
@@ -180,9 +195,70 @@ const deleteUser = asyncHandler(async (req, res) => {
   });
 });
 
+const updateProfileImage = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    res.status(400);
+    throw new Error("Profile image is required");
+  }
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    res.status(401);
+    throw new Error("Not authorized");
+  }
+
+  const currentUser = await User.collection.findOne({ _id: userId });
+
+  if (!currentUser) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  const result = await uploadImageBuffer(req.file.buffer, {
+    public_id: `user-${userId}-${Date.now()}`,
+    overwrite: true,
+  });
+
+  if (currentUser.profileImage?.publicId) {
+    await deleteImage(currentUser.profileImage.publicId);
+  }
+
+  const profileImage = {
+    url: result.secure_url,
+    publicId: result.public_id,
+    width: result.width,
+    height: result.height,
+    format: result.format,
+    bytes: result.bytes,
+    updatedAt: new Date(),
+  };
+
+  await User.collection.updateOne(
+    { _id: userId },
+    {
+      $set: {
+        profileImage,
+        updatedAt: new Date(),
+      },
+    }
+  );
+
+  const updatedUser = await User.collection.findOne({ _id: userId });
+
+  res.status(200).json({
+    success: true,
+    message: "Profile image updated successfully",
+    data: {
+      user: sanitizeUser(updatedUser),
+    },
+  });
+});
+
 module.exports = {
   getUsers,
   createUser,
   updateUser,
   deleteUser,
+  updateProfileImage,
 };

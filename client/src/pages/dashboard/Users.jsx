@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import apiClient from '../../services/apiClient.js';
+import Pagination from '../../components/common/Pagination.jsx';
 import UserTable from '../../components/tables/UserTable.jsx';
 
 const initialForm = {
@@ -21,35 +22,54 @@ export default function Users() {
   const [users, setUsers] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [filters, setFilters] = useState({ search: '', role: '', status: '' });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [form, setForm] = useState(initialForm);
   const [editingUser, setEditingUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [listError, setListError] = useState('');
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(filters.search.trim());
+      setPagination((current) => ({ ...current, page: 1 }));
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [filters.search]);
 
   const queryParams = useMemo(() => ({
     page: pagination.page,
     limit: pagination.limit,
-    search: filters.search,
+    search: debouncedSearch,
     role: filters.role,
     status: filters.status,
-  }), [filters, pagination.limit, pagination.page]);
+  }), [debouncedSearch, filters.role, filters.status, pagination.limit, pagination.page]);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (signal) => {
     setLoading(true);
+    setListError('');
 
     try {
-      const { data } = await apiClient.get('/users', { params: queryParams });
+      const { data } = await apiClient.get('/users', { params: queryParams, signal });
       setUsers(data.data.users);
       setPagination(data.data.pagination);
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      if (error.name === 'CanceledError') return;
+
+      const message = getErrorMessage(error);
+      setListError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }, [queryParams]);
 
   useEffect(() => {
-    fetchUsers();
+    const controller = new AbortController();
+
+    fetchUsers(controller.signal);
+    return () => controller.abort();
   }, [fetchUsers]);
 
   const resetForm = () => {
@@ -60,7 +80,10 @@ export default function Users() {
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
     setFilters((current) => ({ ...current, [name]: value }));
-    setPagination((current) => ({ ...current, page: 1 }));
+
+    if (name !== 'search') {
+      setPagination((current) => ({ ...current, page: 1 }));
+    }
   };
 
   const handleFormChange = (event) => {
@@ -243,13 +266,19 @@ export default function Users() {
 
         <section className="space-y-4">
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04] sm:grid-cols-3">
-            <input
-              name="search"
-              value={filters.search}
-              onChange={handleFilterChange}
-              placeholder="Search users"
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-slate-950 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-slate-950 dark:text-white"
-            />
+            <label className="relative">
+              <span className="sr-only">Search users</span>
+              <input
+                name="search"
+                value={filters.search}
+                onChange={handleFilterChange}
+                placeholder="Search name or email"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm outline-none transition focus:border-slate-950 focus:ring-4 focus:ring-slate-200 dark:border-white/10 dark:bg-slate-950 dark:text-white"
+              />
+              {loading && (
+                <span className="absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900 dark:border-slate-700 dark:border-t-white" />
+              )}
+            </label>
             <select
               name="role"
               value={filters.role}
@@ -273,33 +302,22 @@ export default function Users() {
             </select>
           </div>
 
+          {listError && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+              {listError}
+            </div>
+          )}
+
           <UserTable users={users} loading={loading} onEdit={handleEdit} onDelete={handleDelete} />
 
-          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-slate-500 dark:text-slate-400">
-              Showing page <span className="font-semibold text-slate-950 dark:text-white">{pagination.page}</span> of{' '}
-              <span className="font-semibold text-slate-950 dark:text-white">{pagination.totalPages}</span>, total{' '}
-              <span className="font-semibold text-slate-950 dark:text-white">{pagination.total}</span> users
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={pagination.page <= 1}
-                onClick={() => setPage(pagination.page - 1)}
-                className="rounded-md border border-slate-200 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => setPage(pagination.page + 1)}
-                className="rounded-md border border-slate-200 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            limit={pagination.limit}
+            isLoading={loading}
+            onPageChange={setPage}
+          />
         </section>
       </section>
     </div>

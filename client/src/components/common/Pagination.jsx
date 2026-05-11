@@ -3,14 +3,21 @@ export default function Pagination({
   totalPages = 1,
   total = 0,
   limit = 10,
+  isLoading = false,
   onPageChange,
 }) {
   const safeTotalPages = Math.max(totalPages, 1);
-  const start = total === 0 ? 0 : (page - 1) * limit + 1;
-  const end = Math.min(page * limit, total);
+  const safePage = Math.min(Math.max(page, 1), safeTotalPages);
+  const start = total === 0 ? 0 : (safePage - 1) * limit + 1;
+  const end = Math.min(safePage * limit, total);
 
   const pages = Array.from({ length: safeTotalPages }, (_, index) => index + 1)
-    .filter((item) => item === 1 || item === safeTotalPages || Math.abs(item - page) <= 1);
+    .filter((item) => item === 1 || item === safeTotalPages || Math.abs(item - safePage) <= 1);
+
+  const handlePageChange = (nextPage) => {
+    if (isLoading || nextPage === safePage || nextPage < 1 || nextPage > safeTotalPages) return;
+    onPageChange?.(nextPage);
+  };
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
@@ -23,8 +30,8 @@ export default function Pagination({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          disabled={page <= 1}
-          onClick={() => onPageChange?.(page - 1)}
+          disabled={safePage <= 1 || isLoading}
+          onClick={() => handlePageChange(safePage - 1)}
           className="rounded-md border border-slate-200 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
         >
           Previous
@@ -39,12 +46,13 @@ export default function Pagination({
               {showGap && <span className="text-slate-400">...</span>}
               <button
                 type="button"
-                onClick={() => onPageChange?.(item)}
+                disabled={isLoading}
+                onClick={() => handlePageChange(item)}
                 className={[
                   'min-w-9 rounded-md px-3 py-1.5 font-medium',
-                  item === page
+                  item === safePage
                     ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950'
-                    : 'border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10',
+                    : 'border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10',
                 ].join(' ')}
               >
                 {item}
@@ -55,8 +63,8 @@ export default function Pagination({
 
         <button
           type="button"
-          disabled={page >= safeTotalPages}
-          onClick={() => onPageChange?.(page + 1)}
+          disabled={safePage >= safeTotalPages || isLoading}
+          onClick={() => handlePageChange(safePage + 1)}
           className="rounded-md border border-slate-200 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
         >
           Next
