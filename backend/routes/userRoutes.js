@@ -20,6 +20,7 @@ const listValidation = [
   query("role").optional().isIn(["admin", "manager", "user"]).withMessage("Invalid role filter"),
   query("status").optional().isIn(["active", "inactive"]).withMessage("Invalid status filter"),
   query("search").optional().trim().isLength({ max: 80 }).withMessage("Search cannot exceed 80 characters"),
+  query("sort").optional().isIn(["createdAt", "-createdAt", "name", "-name", "email", "-email"]).withMessage("Invalid sort value"),
 ];
 
 const createValidation = [

@@ -14,6 +14,8 @@ const sanitizeUser = (user) => ({
   updatedAt: user.updatedAt,
 });
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const handleValidationErrors = (req, res) => {
   const errors = validationResult(req);
 
@@ -32,9 +34,11 @@ const buildUserQuery = ({ search, role, status }) => {
   const query = {};
 
   if (search) {
+    const safeSearch = escapeRegex(search.trim());
+
     query.$or = [
-      { name: { $regex: search.trim(), $options: "i" } },
-      { email: { $regex: search.trim(), $options: "i" } },
+      { name: { $regex: safeSearch, $options: "i" } },
+      { email: { $regex: safeSearch, $options: "i" } },
     ];
   }
 
@@ -63,9 +67,10 @@ const getUsers = asyncHandler(async (req, res) => {
   const query = buildUserQuery(req.query);
 
   const [users, total] = await Promise.all([
-    User.find(query).sort(sort).skip(skip).limit(limit),
+    User.find(query).sort(sort).skip(skip).limit(limit).lean(),
     User.countDocuments(query),
   ]);
+  const totalPages = Math.ceil(total / limit) || 1;
 
   res.status(200).json({
     success: true,
@@ -75,7 +80,9 @@ const getUsers = asyncHandler(async (req, res) => {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit) || 1,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
       },
     },
   });
@@ -151,6 +158,11 @@ const updateUser = asyncHandler(async (req, res) => {
 
 const deleteUser = asyncHandler(async (req, res) => {
   handleValidationErrors(req, res);
+
+  if (req.user?._id?.toString() === req.params.id) {
+    res.status(400);
+    throw new Error("You cannot delete your own account");
+  }
 
   const user = await User.findById(req.params.id);
 
