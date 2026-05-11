@@ -1,6 +1,11 @@
 const express = require("express");
-const { body } = require("express-validator");
-const { registerUser, loginUser } = require("../controllers/authController");
+const { body, param } = require("express-validator");
+const {
+  registerUser,
+  loginUser,
+  forgotPassword,
+  resetPassword,
+} = require("../controllers/authController");
 
 const router = express.Router();
 
@@ -38,7 +43,35 @@ const loginValidation = [
     .withMessage("Password is required"),
 ];
 
+const forgotPasswordValidation = [
+  body("email")
+    .trim()
+    .isEmail()
+    .withMessage("Valid email is required")
+    .normalizeEmail(),
+];
+
+const resetPasswordValidation = [
+  param("token")
+    .trim()
+    .isLength({ min: 64, max: 64 })
+    .withMessage("Valid reset token is required")
+    .isHexadecimal()
+    .withMessage("Valid reset token is required"),
+  body("password")
+    .isStrongPassword({
+      minLength: 8,
+      minLowercase: 1,
+      minUppercase: 1,
+      minNumbers: 1,
+      minSymbols: 1,
+    })
+    .withMessage("Password must include uppercase, lowercase, number, and symbol"),
+];
+
 router.post("/register", registerValidation, registerUser);
 router.post("/login", loginValidation, loginUser);
+router.post("/forgot-password", forgotPasswordValidation, forgotPassword);
+router.patch("/reset-password/:token", resetPasswordValidation, resetPassword);
 
 module.exports = router;
