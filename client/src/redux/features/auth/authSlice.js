@@ -21,6 +21,8 @@ const persistSession = ({ token, user }) => {
 const clearSession = () => {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('authUser');
+  document.cookie = 'accessToken=; Max-Age=0; path=/; SameSite=Lax';
+  document.cookie = 'refreshToken=; Max-Age=0; path=/; SameSite=Lax';
 };
 
 const getErrorMessage = (error) => (
@@ -47,6 +49,12 @@ export const registerUser = createAsyncThunk('auth/register', async (payload, { 
   }
 });
 
+export const logoutUser = createAsyncThunk('auth/logout', async () => {
+  await authService.logout();
+  clearSession();
+  return true;
+});
+
 const initialState = {
   user: parseStoredUser(),
   token: storedToken,
@@ -64,6 +72,7 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
+      state.isLoading = false;
       state.error = null;
     },
     hydrateAuth: (state) => {
@@ -104,6 +113,23 @@ const authSlice = createSlice({
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
+      })
+      .addCase(logoutUser.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(logoutUser.rejected, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.isLoading = false;
+        state.error = null;
       });
   },
 });

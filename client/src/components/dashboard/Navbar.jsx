@@ -1,10 +1,29 @@
+import toast, { Toaster } from 'react-hot-toast';
+import { useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext.jsx';
+import { logout, logoutUser } from '../../redux/features/auth/authSlice.js';
+import { authService } from '../../services/authService.js';
 
 export default function Navbar({ onMenuClick }) {
   const { isDarkMode, toggleTheme } = useTheme();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await authService.logout();
+    toast.success('Logged out successfully');
+
+    window.setTimeout(async () => {
+      await dispatch(logoutUser());
+      dispatch(logout());
+      navigate('/auth/login', { replace: true });
+    }, 650);
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-xl transition-colors duration-200 dark:border-white/10 dark:bg-slate-950/80">
+      <Toaster position="top-right" />
       <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
         <button
           type="button"
@@ -87,7 +106,8 @@ export default function Navbar({ onMenuClick }) {
         <button
           type="button"
           className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 shadow-sm shadow-slate-200/60 transition-colors duration-200 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none dark:hover:bg-white/10"
-          aria-label="Open user menu"
+          onClick={handleLogout}
+          aria-label="Log out"
         >
           <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-950 text-xs font-semibold text-white dark:bg-white dark:text-slate-950">
             AD
