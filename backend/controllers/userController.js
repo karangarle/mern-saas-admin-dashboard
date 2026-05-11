@@ -4,6 +4,7 @@ const User = require("../models/User");
 const { deleteImage, uploadImageBuffer } = require("../utils/cloudinary");
 
 const allowedRoles = ["admin", "manager", "user"];
+const allowedSorts = new Set(["createdAt", "-createdAt", "name", "-name", "email", "-email"]);
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -34,9 +35,10 @@ const handleValidationErrors = (req, res) => {
 
 const buildUserQuery = ({ search, role, status }) => {
   const query = {};
+  const trimmedSearch = search?.trim();
 
-  if (search) {
-    const safeSearch = escapeRegex(search.trim());
+  if (trimmedSearch) {
+    const safeSearch = escapeRegex(trimmedSearch);
 
     query.$or = [
       { name: { $regex: safeSearch, $options: "i" } },
@@ -65,11 +67,17 @@ const getUsers = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
   const skip = (page - 1) * limit;
-  const sort = req.query.sort || "-createdAt";
+  const sort = allowedSorts.has(req.query.sort) ? req.query.sort : "-createdAt";
   const query = buildUserQuery(req.query);
+  const projection = "name email role isActive profileImage createdAt updatedAt";
 
   const [users, total] = await Promise.all([
-    User.find(query).sort(sort).skip(skip).limit(limit).lean(),
+    User.find(query)
+      .select(projection)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
     User.countDocuments(query),
   ]);
   const totalPages = Math.ceil(total / limit) || 1;
@@ -85,6 +93,11 @@ const getUsers = asyncHandler(async (req, res) => {
         totalPages,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
+      },
+      filters: {
+        search: req.query.search?.trim() || "",
+        role: req.query.role || "",
+        status: req.query.status || "",
       },
     },
   });
