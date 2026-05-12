@@ -1,10 +1,27 @@
 const path = require("path");
+const fs = require("fs");
 const multer = require("multer");
 
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const allowedExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
-const storage = multer.memoryStorage();
+// Ensure upload directory exists
+const uploadDir = path.join(process.cwd(), "uploads", "profiles");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Local Disk Storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `user-${req.user?._id || "unknown"}-${uniqueSuffix}${ext}`);
+  },
+});
 
 const fileFilter = (req, file, callback) => {
   const extension = path.extname(file.originalname).toLowerCase();

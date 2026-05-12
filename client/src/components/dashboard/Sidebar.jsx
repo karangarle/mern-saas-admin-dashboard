@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
+import { useAppSelector } from '../../redux/hooks.js';
 
 const primaryNavigation = [
-  { name: 'Overview', href: '/app', icon: 'grid' },
-  { name: 'Users', href: '/app/users', icon: 'users' },
-  { name: 'Projects', href: '/app/projects', icon: 'layers' },
-  { name: 'Reports', href: '/app/reports', icon: 'chart' },
-  { name: 'Billing', href: '/app/billing', icon: 'card' },
+  { name: 'Overview', href: '/app', icon: 'grid', roles: ['admin', 'manager', 'user'] },
+  { name: 'Users', href: '/app/users', icon: 'users', roles: ['admin', 'manager'] },
+  { name: 'Projects', href: '/app/projects', icon: 'layers', roles: ['admin', 'manager', 'user'] },
+  { name: 'Reports', href: '/app/reports', icon: 'chart', roles: ['admin', 'manager', 'user'] },
+  { name: 'Billing', href: '/app/billing', icon: 'card', roles: ['admin'] },
 ];
 
 const secondaryNavigation = [
@@ -106,6 +107,11 @@ function NavigationGroup({ items, onClose }) {
         >
           <Icon name={item.icon} />
           <span>{item.name}</span>
+          {item.badge && (
+            <span className="ml-auto rounded bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-600 dark:text-teal-400">
+              {item.badge}
+            </span>
+          )}
         </NavLink>
       ))}
     </nav>
@@ -113,8 +119,34 @@ function NavigationGroup({ items, onClose }) {
 }
 
 export default function Sidebar({ isOpen, onClose }) {
+  const { user } = useAppSelector((state) => state.auth);
+
+  const filteredPrimaryNav = primaryNavigation.filter(
+    (item) => !item.roles || item.roles.includes(user?.role)
+  );
+
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'US';
+
+  // Helper for image URL
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    const backendUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
+    return `${backendUrl}${url}`;
+  };
+
+  const userImageUrl = getImageUrl(user?.profileImage?.url);
+
   return (
     <>
+      {/* Mobile overlay */}
       <div
         className={[
           'fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm transition-opacity lg:hidden',
@@ -130,19 +162,20 @@ export default function Sidebar({ isOpen, onClose }) {
           isOpen ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
+        {/* Brand Section */}
         <div className="flex h-12 items-center justify-between">
           <NavLink to="/app" className="flex items-center gap-3" onClick={onClose}>
             <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white dark:bg-white dark:text-slate-950">
               MS
             </span>
-            <span>
-              <span className="block text-sm font-semibold leading-5 text-slate-950 dark:text-white">
+            <div className="min-w-0">
+              <span className="block truncate text-sm font-bold leading-5 text-slate-950 dark:text-white">
                 MERN SaaS
               </span>
-              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span className="block truncate text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Admin Console
               </span>
-            </span>
+            </div>
           </NavLink>
 
           <button
@@ -158,34 +191,52 @@ export default function Sidebar({ isOpen, onClose }) {
           </button>
         </div>
 
-        <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+        {/* Workspace Indicator */}
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">Acme Workspace</p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">Production environment</p>
+              <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">Production environment</p>
             </div>
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]" />
+            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]" />
           </div>
         </div>
 
-        <div className="mt-6 flex-1 space-y-8 overflow-y-auto">
-          <NavigationGroup items={primaryNavigation} onClose={onClose} />
+        {/* Navigation Section */}
+        <div className="mt-6 flex-1 space-y-8 overflow-y-auto pr-1 custom-scrollbar">
           <div>
-            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Manage
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+              Main Menu
+            </p>
+            <NavigationGroup items={filteredPrimaryNav} onClose={onClose} />
+          </div>
+
+          <div>
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+              Management
             </p>
             <NavigationGroup items={secondaryNavigation} onClose={onClose} />
           </div>
         </div>
 
+        {/* Footer User Section */}
         <div className="mt-6 border-t border-slate-200 pt-4 dark:border-white/10">
-          <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-teal-600 text-sm font-semibold text-white">
-              AD
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">Admin User</p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">admin@company.com</p>
+          <div className="flex items-center gap-3 rounded-xl bg-slate-50/50 p-2 dark:bg-white/[0.02]">
+            <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-lg bg-slate-950 text-xs font-semibold text-white dark:bg-white dark:text-slate-950">
+              {userImageUrl ? (
+                <img src={userImageUrl} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{user?.name}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
+                <p className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {user?.role}
+                </p>
+              </div>
             </div>
           </div>
         </div>

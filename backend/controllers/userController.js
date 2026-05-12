@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const asyncHandler = require("express-async-handler");
 const { validationResult } = require("express-validator");
 const User = require("../models/User");
@@ -186,6 +188,14 @@ const deleteUser = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
+  // Delete local image if exists
+  if (user.profileImage?.publicId?.startsWith("local-")) {
+    const filePath = path.join(process.cwd(), "uploads", "profiles", user.profileImage.publicId.replace("local-", ""));
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  }
+
   await user.deleteOne();
 
   res.status(200).json({
@@ -202,49 +212,81 @@ const updateProfileImage = asyncHandler(async (req, res) => {
   }
 
   const userId = req.user?._id;
-
   if (!userId) {
     res.status(401);
     throw new Error("Not authorized");
   }
 
-  const currentUser = await User.collection.findOne({ _id: userId });
-
+  const currentUser = await User.findById(userId);
   if (!currentUser) {
     res.status(404);
     throw new Error("User not found");
   }
 
-  const result = await uploadImageBuffer(req.file.buffer, {
-    public_id: `user-${userId}-${Date.now()}`,
-    overwrite: true,
-  });
+  let profileImage = {};
 
-  if (currentUser.profileImage?.publicId) {
-    await deleteImage(currentUser.profileImage.publicId);
+  // Check if Cloudinary is configured
+  const isCloudinaryConfigured = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
+
+  if (isCloudinaryConfigured) {
+    // Cloudinary Upload
+    try {
+      // For local disk storage, we need to read the file into a buffer if we want to use the buffer uploader, 
+      // or just upload the file path. Since I switched to diskStorage, I'll use the file path.
+      const result = await uploadImageBuffer(fs.readFileSync(req.file.path), {
+        public_id: `user-${userId}-${Date.now()}`,
+        overwrite: true,
+      });
+
+      if (currentUser.profileImage?.publicId && !currentUser.profileImage.publicId.startsWith("local-")) {
+        await deleteImage(currentUser.profileImage.publicId);
+      }
+
+      profileImage = {
+        url: result.secure_url,
+        publicId: result.public_id,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        bytes: result.bytes,
+        updatedAt: new Date(),
+      };
+
+      // Clean up local temp file after Cloudinary upload
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+    } catch (error) {
+      console.error("Cloudinary upload failed, falling back to local:", error.message);
+      // Fallback to local if Cloudinary fails
+      profileImage = {
+        url: `/uploads/profiles/${req.file.filename}`,
+        publicId: `local-${req.file.filename}`,
+        updatedAt: new Date(),
+      };
+    }
+  } else {
+    // Local Storage only
+    // Delete old local file if it exists
+    if (currentUser.profileImage?.publicId?.startsWith("local-")) {
+      const oldPath = path.join(process.cwd(), "uploads", "profiles", currentUser.profileImage.publicId.replace("local-", ""));
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    }
+
+    profileImage = {
+      url: `/uploads/profiles/${req.file.filename}`,
+      publicId: `local-${req.file.filename}`,
+      updatedAt: new Date(),
+    };
   }
 
-  const profileImage = {
-    url: result.secure_url,
-    publicId: result.public_id,
-    width: result.width,
-    height: result.height,
-    format: result.format,
-    bytes: result.bytes,
-    updatedAt: new Date(),
-  };
+  await User.findByIdAndUpdate(userId, {
+    $set: { profileImage },
+  });
 
-  await User.collection.updateOne(
-    { _id: userId },
-    {
-      $set: {
-        profileImage,
-        updatedAt: new Date(),
-      },
-    }
-  );
-
-  const updatedUser = await User.collection.findOne({ _id: userId });
+  const updatedUser = await User.findById(userId);
 
   res.status(200).json({
     success: true,
@@ -255,10 +297,45 @@ const updateProfileImage = asyncHandler(async (req, res) => {
   });
 });
 
+const updateProfile = asyncHandler(async (req, res) => {
+  handleValidationErrors(req, res);
+
+  const { name, email } = req.body;
+  const userId = req.user._id;
+
+  const updates = {};
+  if (name) updates.name = name;
+  if (email) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ 
+      email: normalizedEmail, 
+      _id: { $ne: userId } 
+    });
+
+    if (existingUser) {
+      res.status(409);
+      throw new Error("Email is already in use");
+    }
+    updates.email = normalizedEmail;
+  }
+
+  const user = await User.findByIdAndUpdate(userId, updates, {
+    new: true,
+    runValidators: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Profile updated successfully",
+    data: { user: sanitizeUser(user) },
+  });
+});
+
 module.exports = {
   getUsers,
   createUser,
   updateUser,
   deleteUser,
   updateProfileImage,
+  updateProfile,
 };

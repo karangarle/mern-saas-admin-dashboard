@@ -33,6 +33,15 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    profileImage: {
+      url: String,
+      publicId: String,
+      width: Number,
+      height: Number,
+      format: String,
+      bytes: Number,
+      updatedAt: Date,
+    },
   },
   {
     timestamps: true,

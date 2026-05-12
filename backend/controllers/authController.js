@@ -39,6 +39,9 @@ const handleValidationErrors = (req, res) => {
   }
 };
 
+// @desc  Register new user
+// @route POST /api/auth/register
+// @access Public
 const registerUser = asyncHandler(async (req, res) => {
   handleValidationErrors(req, res);
 
@@ -68,6 +71,9 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc  Login user
+// @route POST /api/auth/login
+// @access Public
 const loginUser = asyncHandler(async (req, res) => {
   handleValidationErrors(req, res);
 
@@ -96,12 +102,36 @@ const loginUser = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc  Get current logged-in user profile
+// @route GET /api/auth/me
+// @access Private
+const getMe = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user || !user.isActive) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "User profile retrieved",
+    data: {
+      user: sanitizeUser(user),
+    },
+  });
+});
+
+// @desc  Forgot password — generate reset token
+// @route POST /api/auth/forgot-password
+// @access Public
 const forgotPassword = asyncHandler(async (req, res) => {
   handleValidationErrors(req, res);
 
   const normalizedEmail = req.body.email.toLowerCase().trim();
   const user = await User.findOne({ email: normalizedEmail });
-  const responseMessage = "If an account exists, password reset instructions have been generated";
+  const responseMessage =
+    "If an account exists, password reset instructions have been generated";
 
   if (!user || !user.isActive) {
     return res.status(200).json({
@@ -111,8 +141,13 @@ const forgotPassword = asyncHandler(async (req, res) => {
   }
 
   const resetToken = crypto.randomBytes(32).toString("hex");
-  const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRES_IN_MINUTES * 60 * 1000);
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  const expiresAt = new Date(
+    Date.now() + RESET_TOKEN_EXPIRES_IN_MINUTES * 60 * 1000
+  );
 
   await User.collection.updateOne(
     { _id: user._id },
@@ -124,23 +159,35 @@ const forgotPassword = asyncHandler(async (req, res) => {
     }
   );
 
-  const resetUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/auth/reset-password/${resetToken}`;
+  const resetUrl = `${
+    process.env.CLIENT_URL || "http://localhost:5173"
+  }/auth/reset-password/${resetToken}`;
 
   res.status(200).json({
     success: true,
     message: responseMessage,
-    data: process.env.NODE_ENV === "production" ? undefined : {
-      resetToken,
-      resetUrl,
-      expiresInMinutes: RESET_TOKEN_EXPIRES_IN_MINUTES,
-    },
+    data:
+      process.env.NODE_ENV === "production"
+        ? undefined
+        : {
+            resetToken,
+            resetUrl,
+            expiresInMinutes: RESET_TOKEN_EXPIRES_IN_MINUTES,
+          },
   });
 });
 
+// @desc  Reset password using token
+// @route PATCH /api/auth/reset-password/:token
+// @access Public
 const resetPassword = asyncHandler(async (req, res) => {
   handleValidationErrors(req, res);
 
-  const hashedToken = crypto.createHash("sha256").update(req.params.token).digest("hex");
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(req.params.token)
+    .digest("hex");
+
   const tokenRecord = await User.collection.findOne({
     passwordResetToken: hashedToken,
     passwordResetExpires: { $gt: new Date() },
@@ -180,6 +227,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 module.exports = {
   registerUser,
   loginUser,
+  getMe,
   forgotPassword,
   resetPassword,
 };

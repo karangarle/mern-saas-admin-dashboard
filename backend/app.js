@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -16,7 +17,9 @@ const isAllowedOrigin = (origin) => {
   return allowedOrigins.includes(origin);
 };
 
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(cors({
   origin: (origin, callback) => {
     if (isAllowedOrigin(origin)) {
@@ -42,6 +45,9 @@ app.get("/health", (req, res) => {
     message: "API is healthy",
   });
 });
+
+// Serve static files from uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api", routes);
 

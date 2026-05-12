@@ -5,10 +5,15 @@ const {
   createUser,
   updateUser,
   deleteUser,
+  updateProfile,
+  updateProfileImage,
 } = require("../controllers/userController");
 const { protect, authorize } = require("../middleware/authMiddleware");
+const { uploadProfileImage } = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
+
+// ── Validation ────────────────────────────────────────────────────────────────
 
 const objectIdValidation = [
   param("id").isMongoId().withMessage("Valid user id is required"),
@@ -56,11 +61,34 @@ const updateValidation = [
   body("isActive").optional().isBoolean().withMessage("isActive must be a boolean"),
 ];
 
+const profileValidation = [
+  body("name")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 60 })
+    .withMessage("Name must be between 2 and 60 characters"),
+  body("email").optional().trim().isEmail().withMessage("Valid email is required").normalizeEmail(),
+];
+
+// ── Profile Routes (Specific routes first) ───────────────────────────────────
+
+// PATCH /api/users/profile/image
+router.patch("/profile/image", protect, uploadProfileImage, updateProfileImage);
+
+// PATCH /api/users/profile
+router.patch("/profile", protect, profileValidation, updateProfile);
+
+// ── User Management Routes ───────────────────────────────────────────────────
+
+// GET /api/users
+// POST /api/users
 router
   .route("/")
   .get(protect, authorize("admin", "manager"), listValidation, getUsers)
   .post(protect, authorize("admin"), createValidation, createUser);
 
+// PATCH /api/users/:id
+// DELETE /api/users/:id
 router
   .route("/:id")
   .patch(protect, authorize("admin"), updateValidation, updateUser)
