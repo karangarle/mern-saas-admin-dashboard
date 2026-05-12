@@ -4,12 +4,28 @@ const roleStyles = {
   user: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300',
 };
 
+/**
+ * UserTable
+ *
+ * Props:
+ *   users      — array of user objects
+ *   loading    — boolean skeleton state
+ *   canEdit    — boolean: show Edit button (admin only)
+ *   canDelete  — boolean: show Delete button (admin only)
+ *   onEdit     — callback(user)
+ *   onDelete   — callback(user)
+ */
 export default function UserTable({
   users = [],
   loading = false,
+  canEdit = false,
+  canDelete = false,
   onEdit,
   onDelete,
 }) {
+  const showActions = canEdit || canDelete;
+
+  // ── Loading skeleton ────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
@@ -22,16 +38,21 @@ export default function UserTable({
     );
   }
 
+  // ── Table columns ───────────────────────────────────────────────────────────
+  const headings = ['User', 'Role', 'Status', 'Joined', ...(showActions ? ['Actions'] : [])];
+
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 dark:divide-white/10">
           <thead className="bg-slate-50 dark:bg-white/[0.03]">
             <tr>
-              {['User', 'Role', 'Status', 'Joined', 'Actions'].map((heading) => (
+              {headings.map((heading) => (
                 <th
                   key={heading}
-                  className={`px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 ${heading === 'Actions' ? 'text-right' : 'text-left'}`}
+                  className={`px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 ${
+                    heading === 'Actions' ? 'text-right' : 'text-left'
+                  }`}
                 >
                   {heading}
                 </th>
@@ -42,60 +63,92 @@ export default function UserTable({
           <tbody className="divide-y divide-slate-200 dark:divide-white/10">
             {users.length === 0 ? (
               <tr>
-                <td colSpan="5" className="px-5 py-12 text-center">
+                <td colSpan={headings.length} className="px-5 py-12 text-center">
                   <p className="text-sm font-medium text-slate-900 dark:text-white">No users found</p>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Try changing search or filters.</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Try changing search or filters.
+                  </p>
                 </td>
               </tr>
             ) : (
               users.map((user) => (
-                <tr key={user.id} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-white/[0.03]">
+                <tr
+                  key={user.id}
+                  className="transition-colors hover:bg-slate-50/80 dark:hover:bg-white/[0.03]"
+                >
+                  {/* Name + Email */}
                   <td className="whitespace-nowrap px-5 py-4">
                     <div className="flex items-center gap-3">
                       <span className="grid h-10 w-10 place-items-center rounded-lg bg-slate-950 text-xs font-semibold text-white dark:bg-white dark:text-slate-950">
                         {user.name?.slice(0, 2).toUpperCase() || 'US'}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{user.name}</p>
-                        <p className="truncate text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
+                        <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                          {user.name}
+                        </p>
+                        <p className="truncate text-sm text-slate-500 dark:text-slate-400">
+                          {user.email}
+                        </p>
                       </div>
                     </div>
                   </td>
 
+                  {/* Role badge */}
                   <td className="whitespace-nowrap px-5 py-4">
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold capitalize ${roleStyles[user.role] || roleStyles.user}`}>
+                    <span
+                      className={`rounded-md px-2 py-1 text-xs font-semibold capitalize ${
+                        roleStyles[user.role] || roleStyles.user
+                      }`}
+                    >
                       {user.role}
                     </span>
                   </td>
 
+                  {/* Status */}
                   <td className="whitespace-nowrap px-5 py-4">
-                    <span className={user.isActive ? 'text-sm font-medium text-emerald-600 dark:text-emerald-300' : 'text-sm font-medium text-slate-400'}>
+                    <span
+                      className={
+                        user.isActive
+                          ? 'text-sm font-medium text-emerald-600 dark:text-emerald-300'
+                          : 'text-sm font-medium text-slate-400'
+                      }
+                    >
                       {user.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
 
+                  {/* Joined date */}
                   <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500 dark:text-slate-400">
                     {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}
                   </td>
 
-                  <td className="whitespace-nowrap px-5 py-4 text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
-                        onClick={() => onEdit?.(user)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/10"
-                        onClick={() => onDelete?.(user)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+                  {/* Actions — only rendered for admin */}
+                  {showActions && (
+                    <td className="whitespace-nowrap px-5 py-4 text-right">
+                      <div className="inline-flex items-center gap-2">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            id={`edit-user-${user.id}`}
+                            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
+                            onClick={() => onEdit?.(user)}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            id={`delete-user-${user.id}`}
+                            className="rounded-md border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                            onClick={() => onDelete?.(user)}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

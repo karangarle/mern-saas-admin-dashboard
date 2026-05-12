@@ -1,25 +1,63 @@
+import { useState, useRef, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext.jsx';
+import { useAppDispatch, useAppSelector } from '../../redux/hooks.js';
 import { logout, logoutUser } from '../../redux/features/auth/authSlice.js';
 import { authService } from '../../services/authService.js';
 
 export default function Navbar({ onMenuClick }) {
   const { isDarkMode, toggleTheme } = useTheme();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { user } = useAppSelector((state) => state.auth);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'AD';
 
   const handleLogout = async () => {
-    await authService.logout();
-    toast.success('Logged out successfully');
+    try {
+      await authService.logout();
+      toast.success('Logged out successfully');
 
-    window.setTimeout(async () => {
-      await dispatch(logoutUser());
-      dispatch(logout());
-      navigate('/auth/login', { replace: true });
-    }, 650);
+      window.setTimeout(async () => {
+        await dispatch(logoutUser());
+        dispatch(logout());
+        navigate('/auth/login', { replace: true });
+      }, 650);
+    } catch (error) {
+      toast.error('Logout failed');
+    }
   };
+
+  // Helper to format image URL (handle local storage vs cloudinary)
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    const backendUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
+    return `${backendUrl}${url}`;
+  };
+
+  const userImageUrl = getImageUrl(user?.profileImage?.url);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-xl transition-colors duration-200 dark:border-white/10 dark:bg-slate-950/80">
@@ -103,19 +141,93 @@ export default function Navbar({ onMenuClick }) {
           </svg>
         </button>
 
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 shadow-sm shadow-slate-200/60 transition-colors duration-200 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none dark:hover:bg-white/10"
-          onClick={handleLogout}
-          aria-label="Log out"
-        >
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-950 text-xs font-semibold text-white dark:bg-white dark:text-slate-950">
-            AD
-          </span>
-          <svg className="hidden h-4 w-4 text-slate-500 sm:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
+        {/* User Profile Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            type="button"
+            className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none dark:hover:bg-white/10"
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            aria-expanded={isProfileOpen}
+            aria-haspopup="true"
+          >
+            <div className="grid h-7 w-7 place-items-center overflow-hidden rounded-md bg-slate-950 text-[10px] font-semibold text-white dark:bg-white dark:text-slate-950">
+              {userImageUrl ? (
+                <img src={userImageUrl} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            <span className="hidden max-w-[100px] truncate text-sm font-medium text-slate-700 dark:text-slate-200 sm:block">
+              {user?.name || 'User'}
+            </span>
+            <svg
+              className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          {isProfileOpen && (
+            <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/60 transition-all duration-200 dark:border-white/10 dark:bg-slate-900 dark:shadow-none">
+              <div className="mb-2 border-b border-slate-100 px-3 py-2 dark:border-white/5">
+                <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                  {user?.name}
+                </p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                  {user?.email}
+                </p>
+                <p className="mt-1 inline-flex rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:bg-teal-500/10 dark:text-teal-300">
+                  {user?.role}
+                </p>
+              </div>
+
+              <Link
+                to="/app/profile"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                onClick={() => setIsProfileOpen(false)}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                Edit Profile
+              </Link>
+
+              <Link
+                to="/app/settings"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                onClick={() => setIsProfileOpen(false)}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Settings
+              </Link>
+
+              <button
+                type="button"
+                className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                onClick={() => {
+                  setIsProfileOpen(false);
+                  handleLogout();
+                }}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <path d="m16 17 5-5-5-5" />
+                  <path d="M21 12H9" />
+                </svg>
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

@@ -5,12 +5,19 @@ import { useAppDispatch } from '../../redux/hooks.js';
 import { loginUser } from '../../redux/features/auth/authSlice.js';
 import { notify } from './ToastNotifications.jsx';
 
+// Role-based redirect map
+const ROLE_REDIRECT = {
+  admin: '/app/users',
+  manager: '/app/users',
+  user: '/app',
+};
+
 export default function LoginPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const [serverError, setServerError] = useState('');
-  const from = location.state?.from?.pathname || '/app';
+  const from = location.state?.from?.pathname || null;
 
   const {
     register,
@@ -27,9 +34,13 @@ export default function LoginPage() {
     setServerError('');
 
     try {
-      await dispatch(loginUser(values)).unwrap();
+      const result = await dispatch(loginUser(values)).unwrap();
       notify({ message: 'Welcome back. Your workspace is ready.' });
-      navigate(from, { replace: true });
+
+      // If there's a saved "from" path use it, otherwise redirect by role
+      const role = result?.user?.role || 'user';
+      const destination = from || ROLE_REDIRECT[role] || '/app';
+      navigate(destination, { replace: true });
     } catch (error) {
       const message = error || 'Unable to sign in. Please try again.';
       setServerError(message);
@@ -55,11 +66,11 @@ export default function LoginPage() {
 
       <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div>
-          <label className="text-sm font-medium text-slate-700" htmlFor="email">
+          <label className="text-sm font-medium text-slate-700" htmlFor="login-email">
             Email address
           </label>
           <input
-            id="email"
+            id="login-email"
             type="email"
             autoComplete="email"
             className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-slate-950 focus:ring-4 focus:ring-slate-200"
@@ -75,11 +86,19 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-slate-700" htmlFor="password">
-            Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-slate-700" htmlFor="login-password">
+              Password
+            </label>
+            <Link
+              className="text-xs font-medium text-teal-700 hover:text-teal-900"
+              to="/auth/forgot-password"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <input
-            id="password"
+            id="login-password"
             type="password"
             autoComplete="current-password"
             className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-slate-950 focus:ring-4 focus:ring-slate-200"
